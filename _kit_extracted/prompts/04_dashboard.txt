@@ -1,0 +1,7 @@
+Tableau de bord
+
+Construis le tableau de bord à partir de /api/weather. Affiche température, ressenti, humidité, vent, précipitations sur l'intervalle courant avec sa durée, description française du code météo, coordonnées, fuseau, heure de validité et heure de récupération.
+Ajoute courbe des prochaines 48 heures, histogramme des précipitations horaires, tableau des sept jours et bouton Actualiser. Sélectionne les heures futures à partir de l'instant courant, et non les 48 premières heures de la réponse.
+Actualise toutes les 15 minutes lorsque la page est visible. Un seul polling, nettoyé au démontage ; annule ou ignore les anciennes requêtes lors du changement de coordonnées.
+Gère chargement, erreurs et indisponibilité. En cas d'échec, conserve les dernières données en les signalant comme non actualisées. Jamais zéro pour une donnée absente.
+Utilise les unités API et les heures locales du lieu, sans conversion involontaire via le fuseau du navigateur. Ajoute « Conditions issues de modèles météorologiques ».

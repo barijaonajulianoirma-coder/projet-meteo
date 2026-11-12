@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-server
+test-results
+playwright-report
+tests
+_kit_extracted
+kit_antigravity_meteo.zip
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+README.md

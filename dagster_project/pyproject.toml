@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meteo-dagster"
+version = "0.1.0"
+description = "Pipeline ETL Dagster pour Météo Analyse (Open-Meteo → SQLite)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "dagster>=1.9,<2",
+  "dagster-webserver>=1.9,<2",
+  "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[tool.setuptools.packages.find]
+include = ["meteo_dagster*"]
+
+[tool.dagster]
+module_name = "meteo_dagster.definitions"
+code_location_name = "meteo_dagster"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

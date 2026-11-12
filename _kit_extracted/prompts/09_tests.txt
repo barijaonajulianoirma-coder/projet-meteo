@@ -1,0 +1,8 @@
+Tests et corrections
+
+Exécute une validation complète.
+Unitaires : coordonnées, dates, transformation JSON, null, alignement des tableaux, moyennes/extrema/cumuls, périodes incomplètes, années bissextiles, fuseaux, cache et expiration.
+Intégration : succès API, HTTP 400/429/500, timeout, JSON invalide ou incomplet, chargement historique partiel, cache et nombre de tentatives.
+Playwright : tableau de bord, changement de coordonnées, historique, actualisation, filtres, exports, affichage mobile et console sans erreurs.
+Les données simulées sont autorisées uniquement dans les tests.
+Lance vérification TypeScript, tests et build de production. Corrige les erreurs. Rapporte séparément ce qui a été réellement testé, échoué et non vérifiable. N'affirme pas que tout fonctionne sans résultats.

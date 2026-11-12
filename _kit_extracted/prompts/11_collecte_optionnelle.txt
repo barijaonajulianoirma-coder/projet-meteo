@@ -1,0 +1,6 @@
+Option : collecte permanente
+
+Propose d'abord un plan pour stocker les versions successives avec PostgreSQL et une tâche planifiée externe horaire par localisation. Attends validation avant implémentation ou provisionnement.
+Sépare conditions actuelles, prévisions et réanalyses. Stocke fetched_at, valid_time, coordonnées, variable, valeur, unité, source et modèle si fourni. Préserve les instantanés successifs, sans écraser les anciennes prévisions.
+Ne présente pas fetched_at comme la date d'émission du modèle. Préviens les doublons de relance et les exécutions concurrentes. Prévois migrations, index, journal des collectes et rétention configurable.
+Protège l'éventuel endpoint de collecte avec un secret serveur, jamais exposé au frontend. Documente quotas, coûts et volume de stockage. Distingue collecte réussie et données réellement nouvelles. Demande accord avant toute ressource externe.

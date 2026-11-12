@@ -1,0 +1,5 @@
+Design et méthodologie
+
+Finalise une interface intégralement française, responsive mobile/tablette/ordinateur, sobre et accessible. Graphiques avec légendes, unités et info-bulles ; contraste lisible, navigation clavier, champs étiquetés et tableaux alternatifs.
+Crée « Méthodologie et sources » : différence conditions actuelles/prévisions/réanalyses ; validité versus récupération ; formules ; valeurs manquantes et périodes incomplètes.
+Vérifie les conditions officielles actuelles Open-Meteo et les attributions exigées avant de rédiger la section licence. Ajoute les liens des sources. Ne présente pas de seuil personnalisé comme une alerte officielle. N'invente pas de données pour embellir l'interface.

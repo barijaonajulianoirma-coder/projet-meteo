@@ -1,0 +1,5 @@
+Filtres et exports
+
+Ajoute filtres de coordonnées, période, variable et agrégation journalière/mensuelle/annuelle. Tableaux, graphiques et statistiques doivent partager les mêmes données filtrées.
+Ajoute export CSV UTF-8, JSON avec métadonnées, et PNG des graphiques. CSV avec unités dans les noms de colonnes et champs vides pour null. Protège les champs textuels contre les formules de tableur sans transformer les valeurs numériques négatives en texte.
+Inclue provenance, modèle si connu, fuseau, période et date de récupération dans les métadonnées exportées. Préserve les dates sans décalage de jour. Exporte toutes les données filtrées, pas seulement la page visible. Documente le format des exports.

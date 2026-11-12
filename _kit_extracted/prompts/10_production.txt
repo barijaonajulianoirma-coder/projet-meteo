@@ -1,0 +1,7 @@
+Préparer la production
+
+Prépare la production sans déployer ni créer de ressource externe. Utilise une même origine : Express sert le frontend compilé et /api.
+Ajoute build, port configurable, GET /api/health, erreurs sans stack publique, limitation des requêtes, validation, logs sans secrets et cache. Fournis un Dockerfile multi-stage si compatible.
+Documente hébergement Node.js, commandes exactes, variables, contrôle après déploiement, limites du cache mémoire sur plusieurs instances et diagnostic en cas de panne API.
+Vérifie les conditions d'usage Open-Meteo selon le projet. Explique que le polling navigateur n'est pas une collecte permanente.
+Aucune publication, création de compte ou dépense sans confirmation. Présente les actions proposées avant exécution.

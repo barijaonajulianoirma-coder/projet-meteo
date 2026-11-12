@@ -1,0 +1,8 @@
+Cadrage et architecture
+
+Tu es un développeur full-stack. Construis une application « Météo Analyse » en français, pour latitude -18.8792 et longitude 47.5079.
+Stack proposée : React, TypeScript, Vite, Recharts ; backend Node.js, Express, TypeScript ; validation Zod ; tests Vitest et Playwright.
+Pages : tableau de bord, prévisions, analyse historique, méthodologie et sources.
+Inspecte le dossier avant toute modification. Présente architecture, arborescence et plan. Ne code pas encore.
+Sépare conditions actuelles, prévisions et réanalyses historiques. Ne fabrique aucune donnée météo. Ne remplace jamais une donnée absente par zéro. Centralise les appels externes dans le backend.
+Pour la V1 : pas de compte utilisateur ni de base de données. Aucun service payant, suppression de fichier existant ou déploiement sans accord. Attends la validation du plan.

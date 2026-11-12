@@ -1,0 +1,8 @@
+Historique
+
+Crée GET /api/history?latitude=...&longitude=...&start_date=...&end_date=... utilisant https://archive-api.open-meteo.com/v1/archive.
+Paramètres : coordonnées choisies, dates YYYY-MM-DD, daily=temperature_2m_mean,temperature_2m_max,temperature_2m_min,precipitation_sum ; models=era5 ; timezone=auto.
+Interface : sélection des dates, bouton Charger, raccourci 2000–2020, progression, annulation. Propose une fin maximale à aujourd'hui moins 6 jours dans le fuseau du lieu, comme marge opérationnelle pour ERA5, pas comme garantie de disponibilité. Vérifie la documentation actuelle et affiche les valeurs manquantes.
+Valide début <= fin. Découpe les longues périodes par année avec concurrence limitée. Cache les archives ; fusionne, trie et détecte doublons et jours manquants. Gère les succès partiels et périodes en erreur. Ne charge pas vingt ans au démarrage.
+Affiche courbes des températures, histogramme des précipitations et tableau paginé, avec jours attendus, disponibles et manquants.
+Étiquette « Réanalyse historique ERA5 », jamais « mesures directes d'une station ».

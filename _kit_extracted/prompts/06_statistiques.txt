@@ -1,0 +1,6 @@
+Indicateurs et calculs
+
+Ajoute des fonctions pures testées sur les données historiques filtrées : moyenne des températures moyennes journalières, maximum des maxima, minimum des minima, cumul des précipitations disponibles, jours avec précipitations >= 1 mm, moyennes mensuelles de température, cumuls mensuels et annuels de précipitations, moyenne mobile 7 jours.
+Ignore les valeurs nulles dans les calculs mais documente les effectifs et la couverture par variable. Marque tout cumul avec jours manquants « incomplet ». Exige sept jours consécutifs valides pour la moyenne mobile, sinon null.
+Ne moyenne pas des moyennes mensuelles non pondérées pour la moyenne de période. Ne mélange pas historique et prévisions. Affiche les définitions dans les info-bulles.
+Ajoute des tests manuels de référence, des périodes incomplètes et des années bissextiles. Ne conclus pas au changement climatique à partir d'une courte période ou d'une simple courbe.
