@@ -246,7 +246,7 @@ export async function runEtl(options: RunEtlOptions): Promise<EtlRunSummary> {
   let snapshotsSkipped = 0;
   let observationsInserted = 0;
   let retentionDeleted = 0;
-  let fatalError: string | null = null;
+  let fatalError: string | null;
 
   const archiveRange =
     config.archiveDays > 0

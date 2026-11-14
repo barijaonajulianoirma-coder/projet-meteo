@@ -23,7 +23,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
 
   if (!response.ok) {
-    let body: ApiErrorBody | null = null;
+    let body: ApiErrorBody | null;
     try {
       body = (await response.json()) as ApiErrorBody;
     } catch {
@@ -104,7 +104,7 @@ export async function login(username: string, password: string): Promise<AuthSta
   });
 
   if (!response.ok) {
-    let body: ApiErrorBody | null = null;
+    let body: ApiErrorBody | null;
     try {
       body = (await response.json()) as ApiErrorBody;
     } catch {

@@ -27,11 +27,12 @@ export function DashboardAnalysis({ coordinates }: { coordinates: Coordinates })
   const { state, load, cancel } = useAnalysis();
   const [preset, setPreset] = useState<PresetId>('5y');
   const range = useMemo(() => presetRange(preset), [preset]);
+  const { latitude, longitude } = coordinates;
 
   useEffect(() => {
-    load(coordinates, range.start, range.end);
+    load({ latitude, longitude }, range.start, range.end);
     return () => cancel();
-  }, [coordinates.latitude, coordinates.longitude, range.start, range.end, load, cancel]);
+  }, [latitude, longitude, range.start, range.end, load, cancel]);
 
   return (
     <section className="dashboard-analysis" aria-labelledby="analysis-heading">
@@ -89,7 +90,7 @@ export function DashboardAnalysis({ coordinates }: { coordinates: Coordinates })
         <ErrorMessage
           message={state.data ? 'Échec du recalcul' : 'Analyses non chargées'}
           reason={state.error}
-          onRetry={() => load(coordinates, range.start, range.end)}
+          onRetry={() => load({ latitude, longitude }, range.start, range.end)}
           variant={state.data ? 'warning' : 'error'}
         />
       )}

@@ -101,9 +101,9 @@ function betaContinuedFraction(a: number, b: number, x: number): number {
   const MAX_ITERATIONS = 200;
   const EPSILON = 3e-12;
   const TINY = 1e-300;
-  let qab = a + b;
-  let qap = a + 1;
-  let qam = a - 1;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
   let c = 1;
   let d = 1 - (qab * x) / qap;
   if (Math.abs(d) < TINY) d = TINY;

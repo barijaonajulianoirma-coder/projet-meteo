@@ -1,16 +1,23 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { COORDINATE_PRESETS, isValidCoordinates, useCoordinates } from '../coordinates.js';
+import { useState, type FormEvent } from 'react';
+import { COORDINATE_PRESETS, isValidCoordinates, useCoordinates, type Coordinates } from '../coordinates.js';
 
 export function CoordinateSelector(): JSX.Element {
-  const { coordinates, setCoordinates } = useCoordinates();
+  const { coordinates } = useCoordinates();
+  // Remonter le formulaire à chaque changement de coordonnées évite un effet
+  // de synchronisation prop → state (et ses rendus en cascade).
+  return (
+    <CoordinateForm
+      key={`${coordinates.latitude}:${coordinates.longitude}`}
+      coordinates={coordinates}
+    />
+  );
+}
+
+function CoordinateForm({ coordinates }: { coordinates: Coordinates }): JSX.Element {
+  const { setCoordinates } = useCoordinates();
   const [latitude, setLatitude] = useState(String(coordinates.latitude));
   const [longitude, setLongitude] = useState(String(coordinates.longitude));
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLatitude(String(coordinates.latitude));
-    setLongitude(String(coordinates.longitude));
-  }, [coordinates.latitude, coordinates.longitude]);
 
   const activePreset =
     COORDINATE_PRESETS.find(
