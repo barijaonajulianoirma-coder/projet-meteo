@@ -114,6 +114,11 @@ describe('parseCookies', () => {
     expect(parseCookies(undefined)).toEqual({});
     expect(parseCookies('sans-valeur')).toEqual({});
   });
+
+  it('ignore un cookie mal encodé sans lever d’exception', () => {
+    expect(parseCookies('meteo_session=%ZZ; valide=1')).toEqual({ valide: '1' });
+    expect(parseCookies('meteo_session=%E0%A4%A')).toEqual({});
+  });
 });
 
 describe('loadAuthConfig', () => {

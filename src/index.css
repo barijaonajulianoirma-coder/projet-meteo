@@ -459,6 +459,18 @@ body {
   margin-top: 0.5rem;
 }
 
+/* ── Error boundary ─────────────────────────────────────────────────── */
+.error-boundary {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+  padding: 1rem 0;
+}
+
+.empty-state .button {
+  margin-top: 1rem;
+}
+
 /* ── Loading ────────────────────────────────────────────────────────── */
 .loading {
   display: flex;
@@ -504,6 +516,11 @@ body {
   padding: 1rem 1.25rem;
   box-shadow: var(--shadow-sm);
   margin-bottom: 1.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.chart-panel:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow);
 }
 
 .chart-header {
@@ -734,6 +751,39 @@ td.incomplete {
   font-weight: 600;
   margin-bottom: 0.2rem;
   color: var(--color-text-muted);
+}
+
+/* Infobulle structurée des graphiques */
+.chart-tooltip {
+  min-width: 175px;
+  backdrop-filter: blur(6px);
+}
+.tooltip-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+.tooltip-rows li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.tooltip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.tooltip-name {
+  color: var(--color-text-muted);
+}
+.tooltip-value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 /* ── Methodology ────────────────────────────────────────────────────── */
@@ -1035,6 +1085,12 @@ button:focus-visible {
 .recharts-legend-item-text {
   fill: var(--chart-axis);
   font-size: 0.72rem;
+}
+.recharts-surface {
+  overflow: visible;
+}
+.recharts-legend-item {
+  margin-right: 0.85rem !important;
 }
 .recharts-legend-item-text {
   color: var(--chart-axis) !important;

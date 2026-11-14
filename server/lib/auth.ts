@@ -51,7 +51,7 @@ function isScryptFormat(stored: string): boolean {
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
   const [, n, r, p, salt, hash] = parts;
-  return [n, r, p].every((value) => /^\d+$/.test(value)) && salt.length > 0 && hash.length > 0;
+  return [n, r, p].every((value) => /^\d+$/.test(value!)) && salt!.length > 0 && hash!.length > 0;
 }
 
 /**
@@ -145,7 +145,15 @@ export function parseCookies(header: string | undefined): Record<string, string>
     if (separator <= 0) continue;
     const name = part.slice(0, separator).trim();
     if (!name || name in cookies) continue;
-    cookies[name] = decodeURIComponent(part.slice(separator + 1).trim());
+    let value: string;
+    try {
+      value = decodeURIComponent(part.slice(separator + 1).trim());
+    } catch {
+      // Cookie mal encodé (% invalide) : ignoré plutôt que de faire échouer
+      // toute la requête avec une erreur 500.
+      continue;
+    }
+    cookies[name] = value;
   }
   return cookies;
 }
