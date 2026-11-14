@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import type { AuthConfig } from './lib/auth.js';
 import { LoginThrottle } from './lib/bruteForce.js';
 import { toApiErrorBody } from './lib/errors.js';
+import { RedisRateLimitStore } from './lib/rateLimitStore.js';
 import { analysisRouter } from './routes/analysis.js';
 import { authRouter, requireAuth } from './routes/auth.js';
 import { historyRouter } from './routes/history.js';
@@ -63,6 +64,8 @@ export function createApp(options: AppOptions = {}): Express {
         limit: 120,
         standardHeaders: 'draft-7',
         legacyHeaders: false,
+        // Store Redis si REDIS_URL est défini, compteur mémoire sinon.
+        store: new RedisRateLimitStore('api'),
         message: { error: 'Trop de requêtes', reason: 'Réessayez dans une minute.' },
       }),
     );
@@ -90,6 +93,7 @@ export function createApp(options: AppOptions = {}): Express {
           limit: 10,
           standardHeaders: 'draft-7',
           legacyHeaders: false,
+          store: new RedisRateLimitStore('login'),
           message: { error: 'Trop de requêtes', reason: 'Trop de tentatives de connexion, réessayez dans une minute.' },
         }),
       );

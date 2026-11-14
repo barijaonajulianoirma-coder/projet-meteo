@@ -150,6 +150,30 @@ describe('GET /api/weather', () => {
     await supertest(app).get('/api/weather?latitude=-18.0&longitude=47.0');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('déduplique deux requêtes simultanées sur la même coordonnée', async () => {
+    let release!: (response: Response) => void;
+    fetchSpy.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const path = '/api/weather?latitude=-21.5&longitude=49.5';
+
+    const first = supertest(app).get(path).then((response) => response);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+
+    const second = supertest(app).get(path).then((response) => response);
+    // Laisse la seconde requête atteindre le service pendant que l'amont est bloqué.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    release(makeFetchOk(mockForecastResponse()));
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });
 
 // -- /api/history --

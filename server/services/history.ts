@@ -2,17 +2,28 @@ import { diffInDays, subtractDays } from '../../shared/dates.js';
 import { HISTORY_SOURCE } from '../../shared/sources.js';
 import { findMissingDays, isPointEmpty, sortAndDedupeDaily } from '../../shared/stats.js';
 import type { DailyPoint, HistoryPayload, HistoryPeriod, UnitMap } from '../../shared/types.js';
-import { TtlCache } from '../lib/cache.js';
+import { createSharedCache, type SharedCache } from '../lib/cache.js';
 import { mapWithConcurrency } from '../lib/concurrency.js';
+import { roundCoordinates } from '../lib/coordinates.js';
 import { ApiError, UpstreamError } from '../lib/errors.js';
 import { fetchJson } from '../lib/http.js';
+import { abortable, InflightRequests } from '../lib/inflight.js';
 import { buildArchiveUrl, buildHistoryPeriods, normalizeArchive, type ArchiveChunkResult } from '../lib/openMeteo.js';
 
 export const ARCHIVE_CACHE_TTL_MS = 60 * 60 * 1000;
 export const ARCHIVE_CONCURRENCY = 3;
 export const ARCHIVE_SAFETY_DAYS = 6;
 
-const chunkCache = new TtlCache<ArchiveChunkResult>(ARCHIVE_CACHE_TTL_MS, 1000);
+/** Un segment annuel identique n'est téléchargé qu'une fois à la fois. */
+const chunkInflight = new InflightRequests<ArchiveChunkResult>();
+
+let chunkCache: Promise<SharedCache<ArchiveChunkResult>> | null = null;
+
+/** Cache créé au premier usage (la connexion Redis éventuelle est paresseuse). */
+function cache(): Promise<SharedCache<ArchiveChunkResult>> {
+  chunkCache ??= createSharedCache<ArchiveChunkResult>('history', ARCHIVE_CACHE_TTL_MS, 1000);
+  return chunkCache;
+}
 
 export function chunkCacheKey(latitude: number, longitude: number, start: string, end: string): string {
   return `${latitude.toFixed(4)}:${longitude.toFixed(4)}:${start}:${end}`;
@@ -36,25 +47,34 @@ export async function getHistory(
   endDate: string,
   signal?: AbortSignal,
 ): Promise<HistoryResult> {
+  // Une seule valeur arrondie sert de clé de cache, de requête amont et de
+  // coordonnées renvoyées au client.
+  const coordinates = roundCoordinates(latitude, longitude);
   const periods = buildHistoryPeriods(startDate, endDate);
   const firstError: unknown[] = [];
   let cachedChunks = 0;
+  const chunkStore = await cache();
 
   const results = await mapWithConcurrency(periods, ARCHIVE_CONCURRENCY, async (period) => {
-    const key = chunkCacheKey(latitude, longitude, period.start, period.end);
-    const cached = chunkCache.get(key);
+    const key = chunkCacheKey(coordinates.latitude, coordinates.longitude, period.start, period.end);
+    const cached = await chunkStore.get(key);
     if (cached) {
       cachedChunks += 1;
       return { period, chunk: cached, error: null as Error | null };
     }
     try {
-      const raw = await fetchJson<unknown>(buildArchiveUrl(latitude, longitude, period.start, period.end), {
-        timeoutMs: 20_000,
-        retries: 2,
+      const chunk = await abortable(
+        chunkInflight.run(key, async () => {
+          const raw = await fetchJson<unknown>(
+            buildArchiveUrl(coordinates.latitude, coordinates.longitude, period.start, period.end),
+            { timeoutMs: 20_000, retries: 2 },
+          );
+          const normalized = normalizeArchive(raw);
+          await chunkStore.set(key, normalized);
+          return normalized;
+        }),
         signal,
-      });
-      const chunk = normalizeArchive(raw);
-      chunkCache.set(key, chunk);
+      );
       return { period, chunk, error: null as Error | null };
     } catch (error) {
       if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
@@ -124,8 +144,8 @@ export async function getHistory(
   return {
     payload: {
       kind: 'history',
-      latitude,
-      longitude,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
       timezone,
       timezoneAbbreviation,
       utcOffsetSeconds,
@@ -145,6 +165,6 @@ export async function getHistory(
   };
 }
 
-export function clearHistoryCache(): void {
-  chunkCache.clear();
+export async function clearHistoryCache(): Promise<void> {
+  if (chunkCache) await (await chunkCache).clear();
 }

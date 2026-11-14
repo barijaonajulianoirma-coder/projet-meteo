@@ -33,6 +33,8 @@ Commandes utiles :
 npm run dev:client     # frontend seul
 npm run dev:server     # API seule (tsx watch)
 npm run typecheck      # TypeScript client + serveur
+npm run lint           # ESLint (TypeScript + React)
+npm run format         # Prettier sur les sources
 npm test               # tests Vitest
 npm run test:watch     # Vitest en surveillance
 npm run test:e2e       # tests Playwright (installez Chromium si besoin)
@@ -67,7 +69,7 @@ Le backend est le **seul** à appeler Open-Meteo : aucune URL externe fournie pa
 
 Validation : latitude `[-90, 90]`, longitude `[-180, 180]`, dates réelles, `start_date ≤ end_date`, archive depuis `1940-01-01`, fin au plus tard à aujourd'hui − 6 jours (marge opérationnelle ERA5), période ≤ 40 ans.
 
-Comportement réseau : timeout 15 s (prévisions) / 20 s (archive), 2 nouvelles tentatives maximum sur erreurs transitoires, respect de `Retry-After`, temporisation exponentielle. Cache mémoire : prévisions 15 min par coordonnées, archives 1 h par segment annuel.
+Comportement réseau : timeout 15 s (prévisions) / 20 s (archive), 2 nouvelles tentatives maximum sur erreurs transitoires, respect de `Retry-After`, temporisation exponentielle. Cache mémoire : prévisions 15 min par coordonnées, archives 1 h par segment annuel. Les requêtes simultanées portant sur la même ressource partagent un seul appel amont ; l'annulation d'un client n'interrompt pas le travail commun, qui continue et alimente le cache.
 
 ## Données, calculs et limites
 
@@ -179,9 +181,14 @@ horaires/quotidiennes.
 ```bash
 cd dagster_project
 pip install -e ".[dev]"
-dagster dev -m meteo_dagster.definitions
+export DAGSTER_HOME="$PWD/dagster_home"
+dagster dev -m meteo_dagster.definitions --port 3001
 pytest
 ```
+
+L’UI écoute sur <http://localhost:3001> (le port 3000 est utilisé par
+l’application Node) et le `DAGSTER_HOME` versionné conserve l’historique des
+runs et l’état des planifications entre deux démarrages.
 
 Voir [`dagster_project/README.md`](dagster_project/README.md) pour les assets,
 jobs, planifications et la configuration des ressources. Ce pipeline utilise sa
@@ -206,6 +213,7 @@ Variables disponibles :
 | --- | --- | --- |
 | `PORT` | `3000` | port HTTP du serveur |
 | `HOST` | `127.0.0.1` | interface d'écoute (`0.0.0.0` pour exposer au réseau) |
+| `STATIC_DIR` | `dist` | répertoire du frontend compilé servi par Express (relatif au `cwd` ou absolu) |
 | `AUTH_USERNAME` | — | identifiant de connexion (obligatoire si `HOST` non local) |
 | `AUTH_PASSWORD_HASH` | — | hash scrypt généré par `npm run auth:hash` |
 | `SESSION_SECRET` | — | clé HMAC des sessions, 32 caractères minimum |
@@ -248,8 +256,7 @@ Vérifier : réponse `200` sur `/api/health`, en-têtes de sécurité, frontend 
 
 ### Limites d'exploitation
 
-- Le cache est **en mémoire** : avec plusieurs instances, chaque instance possède son propre cache (pas de partage ni d'invalidation distribuée). Pour un déploiement multi-instances, prévoir un cache partagé ou accepter des appels amont supplémentaires.
-- La limitation de débit (120 requêtes/min par IP) est également locale à chaque instance.
+- Par défaut, le cache et la limitation de débit (120 requêtes/min par IP) sont **en mémoire**, donc propres à chaque instance. Définir `REDIS_URL` (après `npm install ioredis`) les rend partagés : le cache est à deux niveaux (mémoire locale devant Redis) et les compteurs de débit deviennent globaux. Sans Redis joignable, l'application retombe silencieusement sur le comportement local.
 - En cas de panne de l'API Open-Meteo, le serveur renvoie `503` avec un message public ; le tableau de bord conserve les dernières données valides et les signale comme non actualisées.
 - Les logs serveur ne contiennent ni secret ni donnée personnelle. Le diagnostic se fait via `/api/health` et les messages d'erreur publics.
 
@@ -263,7 +270,7 @@ Les données sont fournies par Open-Meteo sous licence **CC BY 4.0** ; l'attribu
 npm run typecheck
 npm test
 npm run test:e2e
-npm run ci            # typecheck + Vitest + Playwright (local)
+npm run ci            # lint + typecheck + Vitest + Playwright (local)
 ```
 
 Les tests du pipeline Dagster (Python) sont séparés : `cd dagster_project && pytest`.
@@ -274,7 +281,7 @@ Les tests unitaires couvrent coordonnées, dates (dont années bissextiles), sch
 
 Le workflow GitHub Actions (`.github/workflows/ci.yml`) s'exécute sur chaque push et pull request vers `main`/`master` :
 
-1. `npm run typecheck` + `npm test`
+1. `npm run lint` + `npm run typecheck` + `npm test`
 2. `npm run test:e2e` (Chromium + deps système)
 3. `docker build` de l'image de production
 
