@@ -24,6 +24,7 @@ from meteo_dagster.resources import (
     WarehouseResource,
 )
 from meteo_dagster.schemas import parse_forecast
+from meteo_dagster.storage import persist_raw_document
 from meteo_dagster.transform import transform_forecast
 
 
@@ -115,17 +116,38 @@ def test_retention_purges_old_forecasts(
     resources: dict, forecast_payload: dict
 ) -> None:
     warehouse: WarehouseResource = resources["warehouse"]
+    location = Location(-18.8792, 47.5079)
+    old = datetime.now(timezone.utc) - timedelta(days=130)
     snapshot = transform_forecast(parse_forecast(forecast_payload), forecast_days=7)
     warehouse.save_snapshot(
-        Location(-18.8792, 47.5079),
+        location,
         snapshot,
-        fetched_at=datetime.now(timezone.utc) - timedelta(days=130),
+        fetched_at=old,
         asset="forecast_snapshot",
     )
+
+    raw_dir = Path(resources["meteo_config"].raw_dir)
+    for kind, fetched_at in (
+        ("forecast", old),
+        ("forecast", datetime.now(timezone.utc)),
+        ("archive", old),
+    ):
+        persist_raw_document(
+            raw_dir=str(raw_dir),
+            kind=kind,
+            fetched_at=fetched_at.replace(microsecond=0),
+            locations=(location,),
+            forecast_days=7 if kind == "forecast" else None,
+            partition_key=None,
+            payloads={location.key: forecast_payload},
+        )
 
     result = materialize([retention], resources=resources, raise_on_error=True)
 
     assert result.success
     materialization = result.asset_materializations_for_node("retention")[0]
     assert materialization.metadata["supprimes"].value == 1
-    assert warehouse.latest_quality(Location(-18.8792, 47.5079), "forecast") is None
+    assert materialization.metadata["fichiers_bruts_supprimes"].value == 1
+    assert warehouse.latest_quality(location, "forecast") is None
+    assert len(list((raw_dir / "forecast").glob("*.json.gz"))) == 1
+    assert len(list((raw_dir / "archive").glob("*.json.gz"))) == 1

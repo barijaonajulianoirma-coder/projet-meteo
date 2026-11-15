@@ -9,7 +9,8 @@ from __future__ import annotations
 import gzip
 import json
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -78,6 +79,34 @@ def persist_raw_document(
         partition_key=partition_key,
         payloads=payloads,
     )
+
+
+def purge_raw_forecasts(raw_dir: str, cutoff: datetime) -> int:
+    """Supprime les documents bruts de prévision collectés avant `cutoff`.
+
+    L'horodatage est lu dans le nom de fichier (et non dans le mtime), afin
+    qu'une copie ou une sauvegarde ne réinitialise pas l'âge d'un document.
+    Les archives ERA5 ne sont jamais purgées.
+    """
+    root = Path(raw_dir) / "forecast"
+    if not root.is_dir():
+        return 0
+
+    removed = 0
+    for path in root.glob("forecast_*.json.gz"):
+        match = re.fullmatch(r"forecast_(\d{8}T\d{12})Z\.json\.gz", path.name)
+        if match is None:
+            continue
+        fetched_at = datetime.strptime(match.group(1), "%Y%m%dT%H%M%S%f").replace(
+            tzinfo=timezone.utc
+        )
+        if fetched_at < cutoff:
+            try:
+                path.unlink()
+                removed += 1
+            except FileNotFoundError:  # pragma: no cover - suppression concurrente
+                continue
+    return removed
 
 
 def read_raw_document(path: str) -> RawDocument:

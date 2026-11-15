@@ -32,7 +32,7 @@ from .resources import (
     WarehouseResource,
 )
 from .schemas import parse_archive, parse_forecast
-from .storage import persist_raw_document
+from .storage import persist_raw_document, purge_raw_forecasts
 from .transform import transform_archive, transform_forecast
 
 # ERA5 est publiée avec ~6 jours de retard ; la partition la plus récente
@@ -230,8 +230,8 @@ def archive_snapshot(
     group_name="maintenance",
     compute_kind="sqlite",
     description=(
-        "Purge des snapshots de prévision plus anciens que la rétention "
-        "configurée (les observations sont supprimées en cascade)."
+        "Purge des snapshots de prévision et des documents bruts plus anciens "
+        "que la rétention configurée."
     ),
 )
 def retention(
@@ -244,13 +244,19 @@ def retention(
         return MaterializeResult(metadata={"supprimes": 0, "desactivee": True})
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=meteo_config.retention_days)
-    deleted = warehouse.purge_forecast_snapshots_before(
-        cutoff.replace(microsecond=0).isoformat()
+    cutoff = cutoff.replace(microsecond=0)
+    deleted = warehouse.purge_forecast_snapshots_before(cutoff.isoformat())
+    raw_deleted = purge_raw_forecasts(meteo_config.raw_dir, cutoff)
+    context.log.info(
+        "rétention : %d snapshot(s) et %d fichier(s) brut(s) supprimé(s) avant %s",
+        deleted,
+        raw_deleted,
+        cutoff.isoformat(),
     )
-    context.log.info("rétention : %d snapshot(s) supprimé(s) avant %s", deleted, cutoff.isoformat())
     return MaterializeResult(
         metadata={
             "supprimes": deleted,
+            "fichiers_bruts_supprimes": raw_deleted,
             "date_limite": cutoff.isoformat(),
             "desactivee": False,
         }

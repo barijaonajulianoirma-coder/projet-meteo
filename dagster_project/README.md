@@ -17,11 +17,21 @@ pip install -e ".[dev]"
 
 ## Lancement
 
+Depuis `dagster_project/`, définir un `DAGSTER_HOME` persistant puis démarrer
+l’UI sur le port **3001** (le port 3000 est occupé par l’application Node) :
+
 ```bash
-dagster dev -m meteo_dagster.definitions
+export DAGSTER_HOME="$PWD/dagster_home"
+dagster dev -m meteo_dagster.definitions --port 3001
 ```
 
-Web UI : <http://localhost:3000>.
+Web UI : <http://localhost:3001>.
+
+Le fichier versionné `dagster_home/dagster.yaml` configure le stockage SQLite de
+l’instance dans `dagster_home/history/` ; le reste de ce répertoire est ignoré
+par Git. Sans `DAGSTER_HOME`, Dagster utilise un répertoire temporaire :
+l’historique des runs et l’activation des planifications sont alors perdus à
+chaque arrêt. Les données météo, elles, restent dans `data/`.
 
 ### Assets
 
@@ -31,7 +41,7 @@ Web UI : <http://localhost:3000>.
 | `forecast_snapshot` | silver | — | validation, transformation longue, snapshot SQLite |
 | `archive_raw` | bronze | jour | réponse ERA5 brute d'une journée |
 | `archive_snapshot` | silver | jour | archive ERA5 normalisée et chargée |
-| `retention` | maintenance | — | purge des snapshots de prévision expirés |
+| `retention` | maintenance | — | purge des snapshots et documents bruts de prévision expirés |
 
 Contrôles qualité (non bloquants) :
 
@@ -95,6 +105,9 @@ resources:
   contenu identique (empreinte SHA-256) est ignoré et journalisé comme
   `unchanged` dans `load_events`.
 - La zone brute est écrite de façon atomique (fichier temporaire + `os.replace`).
+- La rétention supprime les snapshots de prévision et les fichiers bruts
+  `data/raw/forecast/*.json.gz` plus anciens que `retention_days` ; les archives
+  ERA5 ne sont jamais purgées.
 - La journée ERA5 doit être disponible : l'API peut renvoyer des valeurs nulles
   pour les dates les plus récentes, d'où le décalage de 6 jours.
 - La base et la zone brute ne doivent être utilisées que par un seul déploiement
@@ -111,4 +124,4 @@ pytest
 Les tests sont hors ligne : les payloads Open-Meteo sont simulés, les assets sont
 matérialisés dans un répertoire temporaire. Ils couvrent validation, alignement
 des séries, transformation, empreinte, zone brute, idempotence, qualité,
-partitions, rétention et câblage des définitions.
+partitions, rétention (base et zone brute) et câblage des définitions.

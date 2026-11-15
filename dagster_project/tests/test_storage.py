@@ -10,7 +10,54 @@ from pathlib import Path
 import pytest
 
 from meteo_dagster.models import Location
-from meteo_dagster.storage import persist_raw_document, read_raw_document
+from meteo_dagster.storage import (
+    persist_raw_document,
+    purge_raw_forecasts,
+    read_raw_document,
+)
+
+
+def _persist(
+    raw_dir: Path, kind: str, fetched_at: datetime, payload: dict
+) -> Path:
+    location = Location(-18.8792, 47.5079, "Antananarivo")
+    document = persist_raw_document(
+        raw_dir=str(raw_dir),
+        kind=kind,
+        fetched_at=fetched_at,
+        locations=(location,),
+        forecast_days=7 if kind == "forecast" else None,
+        partition_key=None,
+        payloads={location.key: payload},
+    )
+    return Path(document.path)
+
+
+def test_purge_raw_forecasts_uses_filename_timestamp(
+    tmp_path: Path, forecast_payload: dict
+) -> None:
+    raw_dir = tmp_path / "raw"
+    old = datetime(2025, 1, 1, 6, 0, tzinfo=timezone.utc)
+    recent = datetime(2025, 2, 1, 6, 0, tzinfo=timezone.utc)
+    archive = _persist(raw_dir, "archive", old, forecast_payload)
+    old_forecast = _persist(raw_dir, "forecast", old, forecast_payload)
+    recent_forecast = _persist(raw_dir, "forecast", recent, forecast_payload)
+    unknown = raw_dir / "forecast" / "manuel.json.gz"
+    unknown.write_bytes(b"")
+
+    removed = purge_raw_forecasts(
+        str(raw_dir), datetime(2025, 1, 15, tzinfo=timezone.utc)
+    )
+
+    assert removed == 1
+    assert not old_forecast.exists()
+    assert recent_forecast.exists()
+    assert archive.exists()
+    assert unknown.exists()
+
+
+def test_purge_raw_forecasts_without_directory(tmp_path: Path) -> None:
+    assert purge_raw_forecasts(str(tmp_path / "absent"), datetime.now(timezone.utc)) == 0
 
 
 def test_persist_and_read_roundtrip(tmp_path: Path, forecast_payload: dict) -> None:
