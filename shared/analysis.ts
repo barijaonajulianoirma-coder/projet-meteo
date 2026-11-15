@@ -667,27 +667,111 @@ function fitHoltWinters(
   return { sse, count, level, trend, season, fitted };
 }
 
+/**
+ * Optimisation Nelder-Mead contrainte sur [0.01, 0.99]³ pour minimiser le MSE
+ * de Holt-Winters. Converge en ~200–300 évaluations, bien plus précis que la
+ * grille 5³ = 125 combinaisons à résolution 0,2.
+ * La grille grossière 3³ sert d'initialisation.
+ */
+function nelderMeadHW(
+  values: number[],
+  keys: string[],
+  maxIter = 300,
+): { alpha: number; beta: number; gamma: number } {
+  const clip = (v: number): number => Math.max(0.01, Math.min(0.99, v));
+
+  const cost = (p: number[]): number => {
+    const fit = fitHoltWinters(values, keys, clip(p[0]!), clip(p[1]!), clip(p[2]!));
+    return fit && fit.count > 0 ? fit.sse / fit.count : 1e9;
+  };
+
+  // Grille grossière pour l'initialisation
+  const initGrid = [0.1, 0.5, 0.9];
+  let initBest = { alpha: 0.3, beta: 0.1, gamma: 0.3 };
+  let initBestCost = Infinity;
+  for (const alpha of initGrid) {
+    for (const beta of initGrid) {
+      for (const gamma of initGrid) {
+        const c = cost([alpha, beta, gamma]);
+        if (c < initBestCost) {
+          initBestCost = c;
+          initBest = { alpha, beta, gamma };
+        }
+      }
+    }
+  }
+
+  // Simplexe initial : point optimal de la grille + 3 perturbations
+  const delta = 0.2;
+  let simplex: number[][] = [
+    [initBest.alpha, initBest.beta, initBest.gamma],
+    [clip(initBest.alpha + delta), initBest.beta, initBest.gamma],
+    [initBest.alpha, clip(initBest.beta + delta), initBest.gamma],
+    [initBest.alpha, initBest.beta, clip(initBest.gamma + delta)],
+  ];
+  let costs = simplex.map(cost);
+
+  for (let iter = 0; iter < maxIter; iter += 1) {
+    // Tri croissant par coût
+    const order = costs.map((c, i) => ({ c, i })).sort((a, b) => a.c - b.c);
+    simplex = order.map((o) => simplex[o.i]!);
+    costs = order.map((o) => costs[o.i]!);
+    if (costs[0]! < 1e-10) break;
+
+    const size = simplex.length;
+    // Centroïde des meilleurs (sans le pire)
+    const centroid = [0, 1, 2].map((d) =>
+      simplex.slice(0, size - 1).reduce((s, p) => s + p[d]!, 0) / (size - 1),
+    );
+
+    // Réflexion
+    const worst = simplex[size - 1]!;
+    const reflected = centroid.map((c, d) => clip(2 * c - worst[d]!));
+    const rCost = cost(reflected);
+
+    if (rCost < costs[0]!) {
+      // Expansion
+      const expanded = centroid.map((c, d) => clip(3 * c - 2 * worst[d]!));
+      if (cost(expanded) < rCost) {
+        simplex[size - 1] = expanded;
+        costs[size - 1] = cost(expanded);
+      } else {
+        simplex[size - 1] = reflected;
+        costs[size - 1] = rCost;
+      }
+    } else if (rCost < costs[size - 2]!) {
+      simplex[size - 1] = reflected;
+      costs[size - 1] = rCost;
+    } else {
+      // Contraction
+      const contracted = centroid.map((c, d) => clip(0.5 * (c + worst[d]!)));
+      if (cost(contracted) < costs[size - 1]!) {
+        simplex[size - 1] = contracted;
+        costs[size - 1] = cost(contracted);
+      } else {
+        // Réduction vers le meilleur point
+        const best0 = simplex[0]!;
+        for (let i = 1; i < size; i += 1) {
+          simplex[i] = simplex[i]!.map((v, d) => clip(0.5 * (v + best0[d]!)));
+          costs[i] = cost(simplex[i]!);
+        }
+      }
+    }
+  }
+
+  const [a, b, g] = simplex[0]!;
+  return { alpha: clip(a!), beta: clip(b!), gamma: clip(g!) };
+}
+
 function holtWinters(run: { key: string; temperature: number }[]): HoltWintersResult | null {
   const n = run.length;
   if (n < 24) return null;
   const values = run.map((item) => item.temperature);
   const keys = run.map((item) => item.key);
-  const grid = [0.1, 0.3, 0.5, 0.7, 0.9];
 
-  let best: HoltWintersFit | null = null;
-  let bestParameters = { alpha: 0.3, beta: 0.1, gamma: 0.3 };
-  for (const alpha of grid) {
-    for (const beta of grid) {
-      for (const gamma of grid) {
-        const candidate = fitHoltWinters(values, keys, alpha, beta, gamma);
-        if (!candidate || candidate.count === 0) continue;
-        if (!best || candidate.sse < best.sse) {
-          best = candidate;
-          bestParameters = { alpha, beta, gamma };
-        }
-      }
-    }
-  }
+  // Optimisation Nelder-Mead au lieu de la grille 5³ = 125 combinaisons.
+  const bestParameters = nelderMeadHW(values, keys);
+  const best = fitHoltWinters(values, keys, bestParameters.alpha, bestParameters.beta, bestParameters.gamma);
   if (!best || best.count === 0) return null;
 
   const rmse = Math.sqrt(best.sse / best.count);
@@ -714,14 +798,44 @@ function holtWinters(run: { key: string; temperature: number }[]): HoltWintersRe
     fitted: run.map((item, index) => ({
       key: item.key,
       observed: item.temperature,
-      fitted: best!.fitted[index] ?? null,
+      fitted: best.fitted[index] ?? null,
     })),
     forecast,
   };
 }
 
+/**
+ * Valeurs critiques ADF interpolées selon MacKinnon (1996),
+ * modèle avec constante + tendance. Nœuds : n=25, 50, 100, asymptotique.
+ */
+function adfCriticalValues(n: number): { one: number; five: number; ten: number } {
+  const nodes = [
+    { n: 25,       one: -4.38, five: -3.60, ten: -3.24 },
+    { n: 50,       one: -4.15, five: -3.50, ten: -3.18 },
+    { n: 100,      one: -4.04, five: -3.45, ten: -3.15 },
+    { n: Infinity, one: -3.96, five: -3.41, ten: -3.12 },
+  ];
+  if (n <= nodes[0]!.n) {
+    return { one: nodes[0]!.one, five: nodes[0]!.five, ten: nodes[0]!.ten };
+  }
+  for (let index = 1; index < nodes.length; index += 1) {
+    const lo = nodes[index - 1]!;
+    const hi = nodes[index]!;
+    const hiN = hi.n === Infinity ? 10_000 : hi.n;
+    if (n <= hiN) {
+      const t = (n - lo.n) / (hiN - lo.n);
+      return {
+        one:  lo.one  + t * (hi.one  - lo.one),
+        five: lo.five + t * (hi.five - lo.five),
+        ten:  lo.ten  + t * (hi.ten  - lo.ten),
+      };
+    }
+  }
+  return { one: -3.96, five: -3.41, ten: -3.12 };
+}
+
 function adfTest(run: { key: string; temperature: number }[]): AdfResult {
-  const criticalValues = { one: -3.96, five: -3.41, ten: -3.12 };
+  const criticalValues = adfCriticalValues(run.length);
   const n = run.length;
   if (n < 36) {
     return { n, lags: 0, statistic: null, criticalValues, stationary: null };

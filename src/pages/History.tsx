@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { TooltipProps } from 'recharts';
 import {
   formatFRDate,
   formatFRMonth,
@@ -30,6 +29,14 @@ import { downloadSvgAsPng, downloadTextFile } from '../lib/download.js';
 import { useCoordinates } from '../coordinates.js';
 import { useHistory } from '../hooks/useHistory.js';
 import {
+  BarGradient,
+  CHART,
+  ChartTooltip,
+  chartAxis,
+  chartGrid,
+  chartLegend,
+} from '../components/charts.js';
+import {
   ChartPanel,
   EmptyState,
   ErrorMessage,
@@ -47,20 +54,6 @@ function todayMinus6(): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 6);
   return d.toISOString().slice(0, 10);
-}
-
-function AggTooltip({ active, payload, label }: TooltipProps<number, string>): JSX.Element | null {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="custom-tooltip">
-      <div className="tooltip-label">{label as string}</div>
-      {payload.map((e) => (
-        <div key={e.dataKey as string} style={{ color: e.color }}>
-          {e.name} : {typeof e.value === 'number' ? formatNumber(e.value) : MISSING_VALUE}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export function History(): JSX.Element {
@@ -388,25 +381,26 @@ export function History(): JSX.Element {
               >
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <CartesianGrid {...chartGrid} />
                     <XAxis
                       dataKey={xKey}
                       tickFormatter={xFormatter}
-                      tick={{ fontSize: 11 }}
                       interval="preserveStartEnd"
+                      {...chartAxis}
                     />
                     <YAxis
-                      tick={{ fontSize: 11 }}
                       unit={` ${data.units['temperature_2m_mean'] ?? '°C'}`}
-                      width={52}
+                      width={56}
+                      {...chartAxis}
                     />
-                    <Legend iconType="line" wrapperStyle={{ fontSize: '0.78rem' }} />
-                    <Tooltip content={<AggTooltip />} />
+                    <Legend {...chartLegend} />
+                    <Tooltip content={<ChartTooltip />} />
                     <Line
                       type="monotone"
                       dataKey="temperatureMax"
                       name={`Max (${data.units['temperature_2m_max'] ?? '°C'})`}
-                      stroke="#f97316"
+                      unit={` ${data.units['temperature_2m_max'] ?? '°C'}`}
+                      stroke={CHART.tempMax}
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls={false}
@@ -415,7 +409,8 @@ export function History(): JSX.Element {
                       type="monotone"
                       dataKey="temperatureMean"
                       name={`Moy. (${data.units['temperature_2m_mean'] ?? '°C'})`}
-                      stroke="#8b5cf6"
+                      unit={` ${data.units['temperature_2m_mean'] ?? '°C'}`}
+                      stroke={CHART.tempMean}
                       strokeWidth={2}
                       dot={false}
                       connectNulls={false}
@@ -424,7 +419,8 @@ export function History(): JSX.Element {
                       type="monotone"
                       dataKey="temperatureMin"
                       name={`Min (${data.units['temperature_2m_min'] ?? '°C'})`}
-                      stroke="#3b82f6"
+                      unit={` ${data.units['temperature_2m_min'] ?? '°C'}`}
+                      stroke={CHART.tempMin}
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls={false}
@@ -434,7 +430,7 @@ export function History(): JSX.Element {
                         type="monotone"
                         dataKey="ma7"
                         name="Moy. mobile 7 j"
-                        stroke="#16a34a"
+                        stroke={CHART.probability}
                         strokeWidth={2}
                         dot={false}
                         strokeDasharray="5 2"
@@ -482,24 +478,27 @@ export function History(): JSX.Element {
               >
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <BarGradient id="grad-hist-precip" color={CHART.precip} />
+                    <CartesianGrid {...chartGrid} />
                     <XAxis
                       dataKey={xKey}
                       tickFormatter={xFormatter}
-                      tick={{ fontSize: 11 }}
                       interval="preserveStartEnd"
+                      {...chartAxis}
                     />
                     <YAxis
-                      tick={{ fontSize: 11 }}
                       unit={` ${data.units['precipitation_sum'] ?? 'mm'}`}
-                      width={52}
+                      width={56}
+                      {...chartAxis}
                     />
-                    <Tooltip content={<AggTooltip />} />
+                    <Tooltip content={<ChartTooltip />} />
                     <Bar
                       dataKey={aggregation === 'daily' ? 'precipitationSum' : 'precipitationTotal'}
                       name={`Préc. (${data.units['precipitation_sum'] ?? 'mm'})`}
-                      fill="#0ea5e9"
-                      radius={[2, 2, 0, 0]}
+                      unit={` ${data.units['precipitation_sum'] ?? 'mm'}`}
+                      fill="url(#grad-hist-precip)"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={20}
                     />
                   </BarChart>
                 </ResponsiveContainer>

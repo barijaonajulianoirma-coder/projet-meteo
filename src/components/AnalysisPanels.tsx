@@ -1,37 +1,36 @@
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import type { TooltipProps } from 'recharts';
 import type {
   AnalysisPayload,
   DescriptiveStats,
   OlsCoefficient,
 } from '../../shared/types.js';
 import { ChartPanel, IndicatorCard } from './ui.js';
+import {
+  AreaGradient,
+  BarGradient,
+  CHART,
+  ChartTooltip,
+  buildHistogram,
+  chartAxis,
+  chartGrid,
+  chartLegend,
+} from './charts.js';
 import { formatNumber, formatPValue, MISSING_VALUE, withUnit } from '../lib/format.js';
-
-function SimpleTooltip({ active, payload, label }: TooltipProps<number, string>): JSX.Element | null {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="custom-tooltip">
-      <div className="tooltip-label">{label as string}</div>
-      {payload.map((entry) => (
-        <div key={String(entry.dataKey)} style={{ color: entry.color }}>
-          {entry.name} : {typeof entry.value === 'number' ? formatNumber(entry.value) : MISSING_VALUE}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function DescriptiveBlock({ stats }: { stats: DescriptiveStats }): JSX.Element {
   return (
@@ -115,6 +114,22 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
         ? 'Baisse'
         : 'Stable';
 
+  // Classes de largeur égale ; précision réduite quand l'amplitude dépasse 10.
+  const temperatureSpan =
+    data.descriptive.temperature.minimum !== null && data.descriptive.temperature.maximum !== null
+      ? data.descriptive.temperature.maximum - data.descriptive.temperature.minimum
+      : 0;
+  const monthlyTempBins = buildHistogram(
+    data.monthlySeries.map((row) => row.temperature),
+    8,
+    temperatureSpan >= 10 ? 0 : 1,
+  );
+  const monthlyPrecipBins = buildHistogram(
+    data.monthlySeries.map((row) => row.precipitation),
+    8,
+    0,
+  );
+
   return (
     <div className="analysis-panels">
       <p className="analysis-meta">
@@ -155,40 +170,116 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
         </div>
       </section>
 
+      <div className="chart-grid">
+        <ChartPanel
+          title="Distribution des températures mensuelles"
+          description="Nombre de mois par classe de température moyenne (8 classes égales)."
+          ariaLabel="Histogramme de distribution des températures mensuelles"
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={monthlyTempBins} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <BarGradient id="grad-hist-monthly-temp" color={CHART.temperature} />
+              <CartesianGrid {...chartGrid} />
+              <XAxis
+                dataKey="label"
+                interval={0}
+                tick={{ fontSize: 10, fill: CHART.axis }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis width={40} allowDecimals={false} unit=" mois" {...chartAxis} />
+              <Tooltip
+                content={<ChartTooltip labelFormatter={(label) => `${label} ${tempUnit}`} />}
+                cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+              />
+              <Bar
+                dataKey="count"
+                name="Mois"
+                unit=" mois"
+                fill="url(#grad-hist-monthly-temp)"
+                radius={[3, 3, 0, 0]}
+                maxBarSize={44}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+
+        <ChartPanel
+          title="Distribution des précipitations mensuelles"
+          description="Nombre de mois par classe de cumul mensuel."
+          ariaLabel="Histogramme de distribution des précipitations mensuelles"
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={monthlyPrecipBins} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <BarGradient id="grad-hist-monthly-precip" color={CHART.precip} />
+              <CartesianGrid {...chartGrid} />
+              <XAxis
+                dataKey="label"
+                interval={0}
+                tick={{ fontSize: 10, fill: CHART.axis }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis width={40} allowDecimals={false} unit=" mois" {...chartAxis} />
+              <Tooltip
+                content={<ChartTooltip labelFormatter={(label) => `${label} ${precipUnit}`} />}
+                cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+              />
+              <Bar
+                dataKey="count"
+                name="Mois"
+                unit=" mois"
+                fill="url(#grad-hist-monthly-precip)"
+                radius={[3, 3, 0, 0]}
+                maxBarSize={44}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartPanel>
+      </div>
+
       <ChartPanel
         title="Séries mensuelles — température et précipitations"
-        description="Moyennes mensuelles sur la période analysée (jours manquants exclus des moyennes)."
+        description="Moyennes mensuelles sur la période analysée : barres = précipitations (axe de droite), aire = température (axe de gauche)."
         ariaLabel="Graphique des séries mensuelles de température et précipitations"
       >
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={monthlyChart} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="key" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis yAxisId="temp" tick={{ fontSize: 11 }} unit={` ${tempUnit}`} width={52} />
-            <YAxis yAxisId="precip" orientation="right" tick={{ fontSize: 11 }} unit={` ${precipUnit}`} width={52} />
-            <Tooltip content={<SimpleTooltip />} />
-            <Legend />
-            <Line
+        <ResponsiveContainer width="100%" height={300}>
+          <ComposedChart data={monthlyChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <BarGradient id="grad-monthly-precip" color={CHART.precip} />
+            <AreaGradient id="grad-monthly-temp" color={CHART.temperature} from={0.28} to={0.02} />
+            <CartesianGrid {...chartGrid} />
+            <XAxis dataKey="key" interval="preserveStartEnd" {...chartAxis} />
+            <YAxis yAxisId="temp" unit={` ${tempUnit}`} width={56} {...chartAxis} />
+            <YAxis
+              yAxisId="precip"
+              orientation="right"
+              unit={` ${precipUnit}`}
+              width={52}
+              {...chartAxis}
+            />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
+            <Legend {...chartLegend} />
+            <Bar
+              yAxisId="precip"
+              dataKey="precipitation"
+              name={`Précipitations (${precipUnit})`}
+              unit={` ${precipUnit}`}
+              fill="url(#grad-monthly-precip)"
+              radius={[3, 3, 0, 0]}
+              maxBarSize={18}
+            />
+            <Area
               yAxisId="temp"
               type="monotone"
               dataKey="temperature"
               name={`Température (${tempUnit})`}
-              stroke="#ef4444"
+              unit={` ${tempUnit}`}
+              stroke={CHART.temperature}
               strokeWidth={2}
-              dot={false}
+              fill="url(#grad-monthly-temp)"
               connectNulls={false}
             />
-            <Line
-              yAxisId="precip"
-              type="monotone"
-              dataKey="precipitation"
-              name={`Précipitations (${precipUnit})`}
-              stroke="#0ea5e9"
-              strokeWidth={2}
-              dot={false}
-              connectNulls={false}
-            />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </ChartPanel>
 
@@ -244,11 +335,20 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
           >
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={acfChart} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="lag" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[-1, 1]} width={40} />
-                <Tooltip content={<SimpleTooltip />} />
-                <Bar dataKey="acf" name="ACF" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
+                <BarGradient id="grad-acf" color={CHART.accent} />
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="lag" {...chartAxis} />
+                <YAxis domain={[-1, 1]} width={44} tickFormatter={(value: number) => formatNumber(value)} {...chartAxis} />
+                <ReferenceLine y={0} stroke={CHART.axis} strokeOpacity={0.6} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
+                <Bar dataKey="acf" name="ACF" fill="url(#grad-acf)" radius={[2, 2, 0, 0]} maxBarSize={18}>
+                  {acfChart.map((point) => (
+                    <Cell
+                      key={point.lag}
+                      fill={point.acf !== null && point.acf < 0 ? CHART.tempMin : CHART.accent}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -262,14 +362,14 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
           >
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={decompositionChart} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="key" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 11 }} unit={` ${tempUnit}`} width={52} />
-                <Tooltip content={<SimpleTooltip />} />
-                <Legend />
-                <Line type="monotone" dataKey="observed" name="Observé" stroke="#64748b" strokeWidth={1.5} dot={false} connectNulls={false} />
-                <Line type="monotone" dataKey="trend" name="Tendance" stroke="#ef4444" strokeWidth={2} dot={false} connectNulls={false} />
-                <Line type="monotone" dataKey="seasonal" name="Saisonnier" stroke="#0ea5e9" strokeWidth={1.5} dot={false} connectNulls={false} />
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="key" interval="preserveStartEnd" {...chartAxis} />
+                <YAxis unit={` ${tempUnit}`} width={56} {...chartAxis} />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: CHART.grid }} />
+                <Legend {...chartLegend} />
+                <Line type="monotone" dataKey="observed" name="Observé" unit={` ${tempUnit}`} stroke={CHART.neutral} strokeWidth={1.5} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="trend" name="Tendance" unit={` ${tempUnit}`} stroke={CHART.temperature} strokeWidth={2} dot={false} connectNulls={false} />
+                <Line type="monotone" dataKey="seasonal" name="Saisonnier" unit={` ${tempUnit}`} stroke={CHART.tempMin} strokeWidth={1.5} dot={false} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -310,16 +410,16 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
                   ]}
                   margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="key" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11 }} unit={` ${tempUnit}`} width={52} />
-                  <Tooltip content={<SimpleTooltip />} />
-                  <Legend />
-                  <Line type="monotone" dataKey="observed" name="Observé" stroke="#64748b" strokeWidth={1.5} dot={false} connectNulls={false} />
-                  <Line type="monotone" dataKey="fitted" name="Ajusté" stroke="#2563eb" strokeWidth={2} dot={false} connectNulls={false} />
-                  <Line type="monotone" dataKey="forecast" name="Prévision" stroke="#16a34a" strokeWidth={2} strokeDasharray="4 4" dot={false} connectNulls={false} />
-                  <Line type="monotone" dataKey="lower" name="Borne basse" stroke="#86efac" strokeWidth={1} strokeDasharray="2 2" dot={false} connectNulls={false} />
-                  <Line type="monotone" dataKey="upper" name="Borne haute" stroke="#86efac" strokeWidth={1} strokeDasharray="2 2" dot={false} connectNulls={false} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis dataKey="key" interval="preserveStartEnd" {...chartAxis} />
+                  <YAxis unit={` ${tempUnit}`} width={56} {...chartAxis} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ stroke: CHART.grid }} />
+                  <Legend {...chartLegend} />
+                  <Line type="monotone" dataKey="observed" name="Observé" unit={` ${tempUnit}`} stroke={CHART.neutral} strokeWidth={1.5} dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="fitted" name="Ajusté" unit={` ${tempUnit}`} stroke={CHART.accent} strokeWidth={2} dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="forecast" name="Prévision" unit={` ${tempUnit}`} stroke={CHART.probability} strokeWidth={2} strokeDasharray="4 4" dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="lower" name="Borne basse" unit={` ${tempUnit}`} stroke="#86efac" strokeOpacity={0.7} strokeWidth={1} strokeDasharray="2 2" dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="upper" name="Borne haute" unit={` ${tempUnit}`} stroke="#86efac" strokeOpacity={0.7} strokeWidth={1} strokeDasharray="2 2" dot={false} connectNulls={false} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -348,13 +448,13 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
           >
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={mlPredictions} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 11 }} unit={` ${tempUnit}`} width={52} />
-                <Tooltip content={<SimpleTooltip />} />
-                <Legend />
-                <Line type="monotone" dataKey="observed" name="Observé" stroke="#64748b" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="predicted" name="Prédit" stroke="#f97316" strokeWidth={2} dot={false} />
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="date" interval="preserveStartEnd" {...chartAxis} />
+                <YAxis unit={` ${tempUnit}`} width={56} {...chartAxis} />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: CHART.grid }} />
+                <Legend {...chartLegend} />
+                <Line type="monotone" dataKey="observed" name="Observé" unit={` ${tempUnit}`} stroke={CHART.neutral} strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="predicted" name="Prédit" unit={` ${tempUnit}`} stroke={CHART.tempMax} strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: CHART.tempMax }} />
               </LineChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -423,16 +523,18 @@ export function AnalysisPanels({ data }: { data: AnalysisPayload }): JSX.Element
           ariaLabel="Climatologie mensuelle température et précipitations"
         >
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={data.climatology} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="temp" tick={{ fontSize: 11 }} unit={` ${tempUnit}`} width={52} />
-              <YAxis yAxisId="precip" orientation="right" tick={{ fontSize: 11 }} unit={` ${precipUnit}`} width={52} />
-              <Tooltip content={<SimpleTooltip />} />
-              <Legend />
-              <Bar yAxisId="temp" dataKey="temperatureMean" name={`Température (${tempUnit})`} fill="#ef4444" radius={[2, 2, 0, 0]} />
-              <Bar yAxisId="precip" dataKey="precipitationMean" name={`Précipitations (${precipUnit})`} fill="#0ea5e9" radius={[2, 2, 0, 0]} />
-            </BarChart>
+            <BarChart data={data.climatology} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <BarGradient id="grad-clim-temp" color={CHART.temperature} />
+                <BarGradient id="grad-clim-precip" color={CHART.precip} />
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="label" {...chartAxis} />
+                <YAxis yAxisId="temp" unit={` ${tempUnit}`} width={56} {...chartAxis} />
+                <YAxis yAxisId="precip" orientation="right" unit={` ${precipUnit}`} width={52} {...chartAxis} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} />
+                <Legend {...chartLegend} />
+                <Bar yAxisId="temp" dataKey="temperatureMean" name={`Température (${tempUnit})`} unit={` ${tempUnit}`} fill="url(#grad-clim-temp)" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                <Bar yAxisId="precip" dataKey="precipitationMean" name={`Précipitations (${precipUnit})`} unit={` ${precipUnit}`} fill="url(#grad-clim-precip)" radius={[4, 4, 0, 0]} maxBarSize={22} />
+              </BarChart>
           </ResponsiveContainer>
         </ChartPanel>
 

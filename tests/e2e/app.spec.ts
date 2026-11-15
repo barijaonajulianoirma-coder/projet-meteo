@@ -15,6 +15,14 @@ interface CapturedRequests {
 async function installApiMocks(page: Page): Promise<CapturedRequests> {
   const captured: CapturedRequests = { weather: [], history: [], analysis: [] };
 
+  await page.route('**/api/auth/status**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ required: false, authenticated: true, username: null }),
+    });
+  });
+
   await page.route('**/api/weather**', async (route) => {
     captured.weather.push(route.request().url());
     await route.fulfill({
@@ -187,6 +195,94 @@ test('historique : chargement, couverture, filtres et exports', async ({ page })
   await page.getByLabel('Lieu').selectOption('Toamasina');
   await expect(page.getByText('Aucune donnée chargée')).toBeVisible();
   await expect(page.getByText(/Jours attendus/)).toHaveCount(0);
+
+  expect(errors).toEqual([]);
+});
+
+test('tableau de bord : snapshot d’accessibilité des prévisions 7 jours', async ({ page }) => {
+  const errors = collectConsoleErrors(page);
+  await openDashboard(page);
+
+  // Fige la structure accessible du tableau 7 jours : rôles, en-têtes et
+  // libellés exposés aux technologies d'assistance.
+  await expect(page.locator('section[aria-labelledby="daily-heading"]')).toMatchAriaSnapshot(`
+    - region "Prévisions — 7 jours":
+      - heading "Prévisions — 7 jours" [level=2]
+      - table:
+        - rowgroup:
+          - row "Date Jour Moy. (°C) Max (°C) Min (°C) Amplitude Préc. (mm)":
+            - columnheader "Date"
+            - columnheader "Jour"
+            - columnheader "Moy. (°C)"
+            - columnheader "Max (°C)"
+            - columnheader "Min (°C)"
+            - columnheader "Amplitude"
+            - columnheader "Préc. (mm)"
+        - rowgroup:
+          - row /\\d+-\\d+-\\d+ mar\\. \\d+ \\d+ \\d+ \\d+° à \\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "mar."
+            - cell /\\d+/
+            - cell /\\d+/
+            - cell /\\d+/
+            - cell /\\d+° à \\d+°/:
+              - img /\\d+° à \\d+°/
+            - cell "0"
+          - row /\\d+-\\d+-\\d+ mer\\. \\d+,\\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "mer."
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell "0"
+          - row /\\d+-\\d+-\\d+ jeu\\. \\d+,\\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° \\d+,\\d+/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "jeu."
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell /\\d+,\\d+/
+          - row /\\d+-\\d+-\\d+ ven\\. \\d+,\\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "ven."
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell "0"
+          - row /\\d+-\\d+-\\d+ sam\\. \\d+,\\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "sam."
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell "0"
+          - row /\\d+-\\d+-\\d+ dim\\. \\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "dim."
+            - cell /\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell "0"
+          - row /\\d+-\\d+-\\d+ lun\\. \\d+,\\d+ \\d+,\\d+ \\d+,\\d+ \\d+,\\d+° à \\d+,\\d+° 0/:
+            - cell /\\d+-\\d+-\\d+/
+            - cell "lun."
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+/
+            - cell /\\d+,\\d+° à \\d+,\\d+°/:
+              - img /\\d+,\\d+° à \\d+,\\d+°/
+            - cell "0"
+  `);
 
   expect(errors).toEqual([]);
 });

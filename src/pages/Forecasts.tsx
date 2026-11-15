@@ -1,18 +1,27 @@
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
   Legend,
 } from 'recharts';
-import type { TooltipProps } from 'recharts';
 import type { HourlyPoint } from '../../shared/types.js';
 import { formatFRHour, formatFRWeekday } from '../../shared/dates.js';
 import { useCoordinates } from '../coordinates.js';
 import { useWeather } from '../hooks/useWeather.js';
+import {
+  AreaGradient,
+  CHART,
+  ChartTooltip,
+  chartAxis,
+  chartGrid,
+  chartLegend,
+} from '../components/charts.js';
 import {
   ChartPanel,
   EmptyState,
@@ -21,20 +30,6 @@ import {
   PageHeader,
 } from '../components/ui.js';
 import { formatNumber, formatOffset } from '../lib/format.js';
-
-function MultilineTooltip({ active, payload, label }: TooltipProps<number, string>): JSX.Element | null {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="custom-tooltip">
-      <div className="tooltip-label">{formatFRHour(label as string)}</div>
-      {payload.map((entry) => (
-        <div key={entry.dataKey as string} style={{ color: entry.color }}>
-          {entry.name} : {typeof entry.value === 'number' ? formatNumber(entry.value) : '—'}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function Forecasts(): JSX.Element {
   const { coordinates } = useCoordinates();
@@ -119,30 +114,37 @@ export function Forecasts(): JSX.Element {
                 ariaLabel="Courbe des températures horaires sur 7 jours"
               >
                 <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <AreaChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <AreaGradient id="grad-forecast-temp" color={CHART.temperature} />
+                    <CartesianGrid {...chartGrid} />
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatFRHour}
-                      tick={{ fontSize: 11 }}
                       interval={23}
+                      {...chartAxis}
                     />
                     <YAxis
-                      tick={{ fontSize: 11 }}
                       unit={` ${data.units.hourly['temperature_2m'] ?? '°C'}`}
-                      width={52}
+                      width={56}
+                      domain={['auto', 'auto']}
+                      {...chartAxis}
                     />
-                    <Tooltip content={<MultilineTooltip />} />
-                    <Line
+                    <Tooltip
+                      content={<ChartTooltip labelFormatter={formatFRHour} />}
+                      cursor={{ stroke: CHART.grid, strokeWidth: 1 }}
+                    />
+                    <Area
                       type="monotone"
                       dataKey="temperature"
                       name="Température"
-                      stroke="#ef4444"
+                      unit={` ${data.units.hourly['temperature_2m'] ?? '°C'}`}
+                      stroke={CHART.temperature}
                       strokeWidth={2}
-                      dot={false}
+                      fill="url(#grad-forecast-temp)"
+                      activeDot={{ r: 4, strokeWidth: 0 }}
                       connectNulls={false}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               </ChartPanel>
             );
@@ -160,22 +162,26 @@ export function Forecasts(): JSX.Element {
                 ariaLabel="Courbe humidité et vitesse du vent"
               >
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <ComposedChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid {...chartGrid} />
                     <XAxis
                       dataKey="time"
                       tickFormatter={formatFRHour}
-                      tick={{ fontSize: 11 }}
                       interval={23}
+                      {...chartAxis}
                     />
-                    <YAxis tick={{ fontSize: 11 }} width={40} />
-                    <Legend iconType="line" wrapperStyle={{ fontSize: '0.78rem' }} />
-                    <Tooltip content={<MultilineTooltip />} />
+                    <YAxis width={40} {...chartAxis} />
+                    <Legend {...chartLegend} />
+                    <Tooltip
+                      content={<ChartTooltip labelFormatter={formatFRHour} />}
+                      cursor={{ stroke: CHART.grid, strokeWidth: 1 }}
+                    />
                     <Line
                       type="monotone"
                       dataKey="humidity"
                       name={`Humidité (${data.units.hourly['relative_humidity_2m'] ?? '%'})`}
-                      stroke="#06b6d4"
+                      unit={` ${data.units.hourly['relative_humidity_2m'] ?? '%'}`}
+                      stroke={CHART.humidity}
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls={false}
@@ -184,7 +190,8 @@ export function Forecasts(): JSX.Element {
                       type="monotone"
                       dataKey="windSpeed"
                       name={`Vent (${data.units.hourly['wind_speed_10m'] ?? 'km/h'})`}
-                      stroke="#64748b"
+                      unit={` ${data.units.hourly['wind_speed_10m'] ?? 'km/h'}`}
+                      stroke={CHART.wind}
                       strokeWidth={1.5}
                       dot={false}
                       strokeDasharray="4 2"
@@ -193,14 +200,15 @@ export function Forecasts(): JSX.Element {
                     <Line
                       type="monotone"
                       dataKey="precipitationProbability"
-                      name="Prob. préc. (%)"
-                      stroke="#10b981"
+                      name="Prob. préc."
+                      unit=" %"
+                      stroke={CHART.probability}
                       strokeWidth={1.5}
                       dot={false}
                       strokeDasharray="2 3"
                       connectNulls={false}
                     />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </ChartPanel>
             );

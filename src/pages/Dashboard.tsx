@@ -1,21 +1,33 @@
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
 } from 'recharts';
 import type { TooltipProps } from 'recharts';
-import type { HourlyPoint } from '../../shared/types.js';
 import { formatFRHour, formatFRWeekday } from '../../shared/dates.js';
 import { describeWeatherCode } from '../../shared/weatherCodes.js';
 import { useCoordinates } from '../coordinates.js';
 import { useWeather, AUTO_REFRESH_MS } from '../hooks/useWeather.js';
 import { DashboardAnalysis } from '../components/DashboardAnalysis.js';
+import {
+  AreaGradient,
+  BarGradient,
+  CHART,
+  ChartTooltip,
+  buildHistogram,
+  chartAxis,
+  chartGrid,
+  chartLegend,
+} from '../components/charts.js';
 import {
   ChartPanel,
   EmptyState,
@@ -61,33 +73,33 @@ function rangeStyle(
   return { left: `${left}%`, width: `${Math.min(width, 100 - left)}%` };
 }
 
-function HourlyTooltip({ active, payload }: TooltipProps<number, string>): JSX.Element | null {
+/** Infobulle de l'amplitude quotidienne : lit la ligne source, pas les séries empilées. */
+function DailyRangeTooltip({ active, payload }: TooltipProps<number, string>): JSX.Element | null {
   if (!active || !payload?.length) return null;
-  const data = payload[0]?.payload as HourlyPoint | undefined;
-  if (!data) return null;
+  const row = payload[0]?.payload as
+    | { date: string; min: number | null; max: number | null; mean: number | null }
+    | undefined;
+  if (!row) return null;
   return (
-    <div className="custom-tooltip">
-      <div className="tooltip-label">{formatFRHour(data.time)}</div>
-      {payload.map((entry) => (
-        <div key={entry.dataKey as string}>
-          {entry.name} : {typeof entry.value === 'number' ? formatNumber(entry.value) : MISSING_VALUE}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PrecipTooltip({ active, payload }: TooltipProps<number, string>): JSX.Element | null {
-  if (!active || !payload?.length) return null;
-  const data = payload[0]?.payload as HourlyPoint | undefined;
-  if (!data) return null;
-  return (
-    <div className="custom-tooltip">
-      <div className="tooltip-label">{formatFRHour(data.time)}</div>
-      <div>Précipitations : {formatNumber(data.precipitation)} mm</div>
-      {data.precipitationProbability !== null && (
-        <div>Probabilité : {formatNumber(data.precipitationProbability, 0)} %</div>
-      )}
+    <div className="custom-tooltip chart-tooltip">
+      <p className="tooltip-label">{row.date}</p>
+      <ul className="tooltip-rows">
+        <li>
+          <span className="tooltip-dot" style={{ background: CHART.tempMax }} aria-hidden="true" />
+          <span className="tooltip-name">Maximum</span>
+          <span className="tooltip-value">{withUnit(row.max, '°C')}</span>
+        </li>
+        <li>
+          <span className="tooltip-dot" style={{ background: CHART.tempMean }} aria-hidden="true" />
+          <span className="tooltip-name">Moyenne</span>
+          <span className="tooltip-value">{withUnit(row.mean, '°C')}</span>
+        </li>
+        <li>
+          <span className="tooltip-dot" style={{ background: CHART.tempMin }} aria-hidden="true" />
+          <span className="tooltip-name">Minimum</span>
+          <span className="tooltip-value">{withUnit(row.min, '°C')}</span>
+        </li>
+      </ul>
     </div>
   );
 }
@@ -106,6 +118,29 @@ export function Dashboard(): JSX.Element {
     : [];
   const weekMin = weekTemps.length ? Math.min(...weekTemps) : null;
   const weekMax = weekTemps.length ? Math.max(...weekTemps) : null;
+
+  // Les graphiques horaires partent de l'heure courante renvoyée par l'API.
+  const nowRef = data?.current?.time ?? new Date().toISOString().slice(0, 16);
+  const upcoming = data ? data.hourly.filter((hour) => hour.time >= nowRef).slice(0, 48) : [];
+  const hourlyTempUnit = data?.units.hourly['temperature_2m'] ?? '°C';
+  const hourlyPrecipUnit = data?.units.hourly['precipitation'] ?? 'mm';
+  const dailyTempUnit = data?.units.daily['temperature_2m_max'] ?? '°C';
+  const tempBins = buildHistogram(
+    upcoming.map((hour) => hour.temperature),
+    8,
+    0,
+  );
+  const dailyRows = (data?.daily ?? []).map((day) => ({
+    date: day.date,
+    label: `${formatFRWeekday(day.date).slice(0, 3)} ${day.date.slice(8, 10)}`,
+    min: day.temperatureMin,
+    max: day.temperatureMax,
+    mean: day.temperatureMean,
+    range:
+      day.temperatureMin !== null && day.temperatureMax !== null
+        ? Math.max(day.temperatureMax - day.temperatureMin, 0)
+        : null,
+  }));
 
   if (loading && !data) {
     return <Loading label="Chargement des conditions actuelles…" />;
@@ -218,108 +253,254 @@ export function Dashboard(): JSX.Element {
           </section>
 
           <div className="chart-grid">
-          {/* Graphique 48 h */}
-          {(() => {
-            const now = data.current?.time ?? new Date().toISOString().slice(0, 16);
-            const upcoming = data.hourly.filter((h) => h.time >= now).slice(0, 48);
-            if (upcoming.length === 0) return null;
-
-            const altRows = upcoming.map((h) => ({
-              heure: h.time,
-              temp: formatNumber(h.temperature),
-              humidite: formatNumber(h.humidity, 0),
-              vent: formatNumber(h.windSpeed),
-            }));
-
-            return (
-              <ChartPanel
-                title="Température — 48 prochaines heures"
-                description={`Heures locales (${data.timezone}). Unité : ${data.units.hourly['temperature_2m'] ?? '°C'}.`}
-                ariaLabel="Courbe de température sur les 48 prochaines heures"
-                altTable={
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Heure</th>
-                        <th className="num">Temp.</th>
-                        <th className="num">Humidité</th>
-                        <th className="num">Vent</th>
+          {/* Courbe 48 h */}
+          {upcoming.length > 0 && (
+            <ChartPanel
+              title="Température — 48 prochaines heures"
+              description={`Heures locales (${data.timezone}). Unité : ${hourlyTempUnit}.`}
+              ariaLabel="Courbe de température sur les 48 prochaines heures"
+              altTable={
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Heure</th>
+                      <th className="num">Temp.</th>
+                      <th className="num">Humidité</th>
+                      <th className="num">Vent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upcoming.map((hour) => (
+                      <tr key={hour.time}>
+                        <td>{formatFRHour(hour.time)}</td>
+                        <td className="num">{formatNumber(hour.temperature)}</td>
+                        <td className="num">{formatNumber(hour.humidity, 0)}</td>
+                        <td className="num">{formatNumber(hour.windSpeed)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {altRows.map((row) => (
-                        <tr key={row.heure}>
-                          <td>{formatFRHour(row.heure)}</td>
-                          <td className="num">{row.temp}</td>
-                          <td className="num">{row.humidite}</td>
-                          <td className="num">{row.vent}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                }
-              >
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="time"
-                      tickFormatter={formatFRHour}
-                      tick={{ fontSize: 11 }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11 }}
-                      unit={` ${data.units.hourly['temperature_2m'] ?? '°C'}`}
-                      width={52}
-                    />
-                    <Tooltip content={<HourlyTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="temperature"
-                      name="Température"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                      dot={false}
-                      connectNulls={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartPanel>
-            );
-          })()}
+                    ))}
+                  </tbody>
+                </table>
+              }
+            >
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <AreaGradient id="grad-hourly-temp" color={CHART.temperature} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={formatFRHour}
+                    interval="preserveStartEnd"
+                    {...chartAxis}
+                  />
+                  <YAxis unit={` ${hourlyTempUnit}`} width={56} domain={['auto', 'auto']} {...chartAxis} />
+                  <Tooltip
+                    content={<ChartTooltip labelFormatter={formatFRHour} />}
+                    cursor={{ stroke: CHART.grid, strokeWidth: 1 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="temperature"
+                    name="Température"
+                    unit={` ${hourlyTempUnit}`}
+                    stroke={CHART.temperature}
+                    strokeWidth={2}
+                    fill="url(#grad-hourly-temp)"
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    connectNulls={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          )}
 
           {/* Histogramme précipitations 48 h */}
-          {(() => {
-            const now = data.current?.time ?? new Date().toISOString().slice(0, 16);
-            const upcoming = data.hourly.filter((h) => h.time >= now).slice(0, 48);
-            const hasData = upcoming.some((h) => h.precipitation !== null);
-            if (!hasData) return null;
-            return (
-              <ChartPanel
-                title="Précipitations horaires — 48 prochaines heures"
-                description={`Unité : ${data.units.hourly['precipitation'] ?? 'mm'}.`}
-                ariaLabel="Histogramme des précipitations sur les 48 prochaines heures"
-              >
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={upcoming} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      dataKey="time"
-                      tickFormatter={formatFRHour}
-                      tick={{ fontSize: 11 }}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis tick={{ fontSize: 11 }} unit=" mm" width={44} />
-                    <Tooltip content={<PrecipTooltip />} />
-                    <Bar dataKey="precipitation" name="Précipitations" fill="#0ea5e9" radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartPanel>
-            );
-          })()}
+          {upcoming.some((hour) => hour.precipitation !== null) && (
+            <ChartPanel
+              title="Précipitations horaires — 48 prochaines heures"
+              description={`Cumul horaire (${hourlyPrecipUnit}) et probabilité de précipitation.`}
+              ariaLabel="Histogramme des précipitations sur les 48 prochaines heures"
+            >
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={upcoming} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <BarGradient id="grad-hourly-precip" color={CHART.precip} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={formatFRHour}
+                    interval="preserveStartEnd"
+                    {...chartAxis}
+                  />
+                  <YAxis
+                    yAxisId="rain"
+                    unit={` ${hourlyPrecipUnit}`}
+                    width={52}
+                    allowDecimals={false}
+                    {...chartAxis}
+                  />
+                  <YAxis
+                    yAxisId="prob"
+                    orientation="right"
+                    unit=" %"
+                    width={44}
+                    domain={[0, 100]}
+                    {...chartAxis}
+                  />
+                  <Tooltip
+                    content={<ChartTooltip labelFormatter={formatFRHour} />}
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+                  />
+                  <Legend {...chartLegend} />
+                  <Bar
+                    yAxisId="rain"
+                    dataKey="precipitation"
+                    name={`Cumul (${hourlyPrecipUnit})`}
+                    unit={` ${hourlyPrecipUnit}`}
+                    fill="url(#grad-hourly-precip)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={20}
+                  />
+                  <Line
+                    yAxisId="prob"
+                    type="monotone"
+                    dataKey="precipitationProbability"
+                    name="Probabilité"
+                    unit=" %"
+                    stroke={CHART.probability}
+                    strokeWidth={1.5}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          )}
+
+          {/* Distribution des températures horaires */}
+          {tempBins.length > 0 && (
+            <ChartPanel
+              title="Distribution des températures — 48 prochaines heures"
+              description="Nombre d’heures par classe de température (classes de largeur égale)."
+              ariaLabel="Histogramme de distribution des températures horaires"
+              altTable={
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Classe ({hourlyTempUnit})</th>
+                      <th className="num">Heures</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tempBins.map((bin) => (
+                      <tr key={bin.key}>
+                        <td>{bin.label}</td>
+                        <td className="num">{formatNumber(bin.count, 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+            >
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={tempBins} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <BarGradient id="grad-temp-hist" color={CHART.tempMean} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis
+                    dataKey="label"
+                    interval={0}
+                    tick={{ fontSize: 10, fill: CHART.axis }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis width={40} allowDecimals={false} unit=" h" {...chartAxis} />
+                  <Tooltip
+                    content={<ChartTooltip labelFormatter={(label) => `${label} ${hourlyTempUnit}`} />}
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+                  />
+                  <Bar
+                    dataKey="count"
+                    name="Heures"
+                    unit=" h"
+                    fill="url(#grad-temp-hist)"
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={44}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          )}
 
           </div>
+
+          {/* Amplitude thermique 7 jours */}
+          {dailyRows.length > 0 && (
+            <ChartPanel
+              title="Amplitude thermique — 7 jours"
+              description={`Bande des minimales et maximales quotidiennes, avec la moyenne (${dailyTempUnit}).`}
+              ariaLabel="Amplitude des températures minimales et maximales sur sept jours"
+              altTable={
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th className="num">Min</th>
+                      <th className="num">Moy.</th>
+                      <th className="num">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyRows.map((row) => (
+                      <tr key={row.date}>
+                        <td>{row.date}</td>
+                        <td className="num">{formatNumber(row.min)}</td>
+                        <td className="num">{formatNumber(row.mean)}</td>
+                        <td className="num">{formatNumber(row.max)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+            >
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={dailyRows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <AreaGradient id="grad-daily-range" color={CHART.tempMin} from={0.3} to={0.06} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis dataKey="label" {...chartAxis} />
+                  <YAxis
+                    unit={` ${dailyTempUnit}`}
+                    width={56}
+                    domain={['dataMin - 2', 'dataMax + 2']}
+                    {...chartAxis}
+                  />
+                  <Tooltip content={<DailyRangeTooltip />} cursor={{ stroke: CHART.grid }} />
+                  <Area
+                    type="monotone"
+                    dataKey="min"
+                    stackId="range"
+                    stroke="none"
+                    fill="transparent"
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="range"
+                    stackId="range"
+                    stroke="none"
+                    fill="url(#grad-daily-range)"
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mean"
+                    name="Moyenne"
+                    unit={` ${dailyTempUnit}`}
+                    stroke={CHART.tempMean}
+                    strokeWidth={2}
+                    dot={{ r: 3, strokeWidth: 0, fill: CHART.tempMean }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          )}
 
           {/* Tableau 7 jours */}
           <section aria-labelledby="daily-heading">

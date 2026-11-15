@@ -3,6 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
+  // Le premier rendu passe par la transformation à froid de Vite (Recharts),
+  // qui dépasse 5 s avec plusieurs workers. 15 s couvre ce démarrage réel.
+  expect: { timeout: 15_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
