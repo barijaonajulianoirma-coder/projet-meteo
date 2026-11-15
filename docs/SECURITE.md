@@ -190,9 +190,9 @@ connectée à Internet.
 - **Sessions non révocables individuellement** : le jeton est stateless. Changer
   `SESSION_SECRET` invalide toutes les sessions d'un coup ; il n'existe pas de
   « déconnecter tous les autres appareils ».
-- **Compteurs en mémoire** : rate limiting et verrouillage anti-force brute sont
-  locaux à l'instance. Avec plusieurs instances, chaque instance a son propre
-  compteur (prévoir un stockage partagé, ex. Redis).
+- **Compteurs en mémoire** : par défaut, le rate limiting est local à l'instance.
+  Définir `REDIS_URL` partage les compteurs (et le cache) entre instances ; le
+  verrouillage anti-force brute reste, lui, local à chaque instance.
 - **Un seul compte** : pas de rôles, pas de 2FA, pas de gestion multi-utilisateurs.
 - **Pas de journal d'audit persistant** : seules les erreurs `5xx` sont journalisées.
 - **Pas de révocation de mot de passe à chaud** : modifier `AUTH_PASSWORD_HASH`
@@ -229,5 +229,6 @@ curl -b cookies.txt \
   'http://127.0.0.1:3000/api/weather?latitude=-18.8792&longitude=47.5079'
 ```
 
-Le port Dagster (`dagster_project/`) n'est pas concerné par cette application :
-ne pas l'exposer et vérifier qu'il n'entre pas en conflit avec le port `3000`.
+Le pipeline Dagster (`dagster_project/`) n'est pas concerné par cette
+application : son UI écoute sur le port `3001` (l'application Node occupe
+`3000`). Ne pas l'exposer au réseau et la laisser sur l'interface locale.
