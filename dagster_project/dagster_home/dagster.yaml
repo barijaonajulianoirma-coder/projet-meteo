@@ -1,0 +1,14 @@
+# Instance Dagster persistante.
+#
+# Utilisation (depuis dagster_project/) :
+#
+#   export DAGSTER_HOME="$PWD/dagster_home"
+#   dagster dev -m meteo_dagster.definitions --port 3001
+#
+# Sans DAGSTER_HOME, Dagster utilise un répertoire temporaire : l'historique
+# des runs et l'activation des planifications sont alors perdus à l'arrêt.
+
+# Le stockage (SQLite) et l'historique sont écrits par défaut dans
+# $DAGSTER_HOME/history ; aucun chemin relatif n'est donc nécessaire ici.
+telemetry:
+  enabled: false

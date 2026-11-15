@@ -14,3 +14,6 @@ __pycache__/
 .env
 .env.local
 *.log
+dagster_project/dagster_home/*
+!dagster_project/dagster_home/dagster.yaml
+dagster_project/.tmp_dagster_home_*/
